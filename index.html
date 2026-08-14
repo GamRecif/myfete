@@ -137,14 +137,27 @@
 // application "Web" (icône </>) si tu n'en as pas encore une, puis copie
 // l'objet firebaseConfig proposé ici.
 // ============================================================================
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "TON_API_KEY",
-  authDomain: "TON_PROJET.firebaseapp.com",
-  projectId: "TON_PROJET_ID",
-  storageBucket: "TON_PROJET.appspot.com",
-  messagingSenderId: "TON_SENDER_ID",
-  appId: "TON_APP_ID"
+  apiKey: "AIzaSyBA6QzXc5rFLhLVoEOhsuWGTwbvry6rr14",
+  authDomain: "mon-anniversaire-9f21e.firebaseapp.com",
+  projectId: "mon-anniversaire-9f21e",
+  storageBucket: "mon-anniversaire-9f21e.firebasestorage.app",
+  messagingSenderId: "557955249831",
+  appId: "1:557955249831:web:20be1961e92d4e721dcd82",
+  measurementId: "G-0XBLGN9S7C"
 };
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
