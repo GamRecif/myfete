@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Confirme ta présence</title>
+<style>
+  :root {
+    --primary: #534AB7;
+    --primary-dark: #3C3489;
+    --primary-bg: #EEEDFE;
+    --bg: #F8FAFC;
+    --card: #FFFFFF;
+    --text: #1F2937;
+    --text-secondary: #64748B;
+    --confirmed-bg: #EAF3DE; --confirmed-fg: #3B6D11;
+    --pending-bg: #FAEEDA; --pending-fg: #854F0B;
+    --declined-bg: #FCEBEB; --declined-fg: #A32D2D;
+    --border: #E5E7EB;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px 16px 60px;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  .card {
+    background: var(--card);
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  }
+  .header { text-align: center; padding: 20px 0 8px; }
+  .header .emoji { font-size: 44px; }
+  .header h1 { font-size: 22px; margin: 8px 0 4px; }
+  .header .meta { color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+  .pill {
+    display: inline-block; margin-top: 10px; padding: 6px 14px;
+    background: var(--primary-bg); color: var(--primary-dark);
+    border-radius: 999px; font-size: 13px; font-weight: 600;
+  }
+  h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .btn {
+    display: block; width: 100%; padding: 13px; margin-top: 8px;
+    border: none; border-radius: 12px; font-size: 15px; font-weight: 600;
+    cursor: pointer; text-align: center; transition: transform 0.1s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-outline { background: var(--primary-bg); color: var(--primary-dark); }
+  .status-row { display: flex; gap: 8px; }
+  .status-btn {
+    flex: 1; padding: 12px 8px; border-radius: 12px; border: 2px solid var(--border);
+    background: white; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-secondary);
+  }
+  .status-btn.active.confirmed { border-color: var(--confirmed-fg); background: var(--confirmed-bg); color: var(--confirmed-fg); }
+  .status-btn.active.declined { border-color: var(--declined-fg); background: var(--declined-bg); color: var(--declined-fg); }
+  textarea, input[type=text] {
+    width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+    font-size: 14px; font-family: inherit; resize: vertical; margin-top: 8px;
+  }
+  .wish-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid var(--border); gap: 10px;
+  }
+  .wish-item:last-child { border-bottom: none; }
+  .wish-name { font-weight: 600; font-size: 14px; }
+  .wish-price { color: var(--text-secondary); font-size: 12px; }
+  .claim-btn {
+    padding: 8px 12px; border-radius: 10px; border: none; font-size: 12px; font-weight: 600;
+    background: var(--primary); color: white; cursor: pointer; white-space: nowrap;
+  }
+  .claim-btn.claimed { background: var(--confirmed-bg); color: var(--confirmed-fg); cursor: default; }
+  .note { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+  .success { color: var(--confirmed-fg); font-size: 13px; font-weight: 600; margin-top: 8px; display: none; }
+  .error { color: var(--declined-fg); font-size: 13px; margin-top: 8px; display: none; }
+  #loading, #notFound { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
+  #notFound { display: none; }
+  #content { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="loading">Chargement…</div>
+
+  <div id="notFound">
+    <p>🎈 Cette fête est introuvable, ou le lien est incorrect.</p>
+  </div>
+
+  <div id="content">
+    <div class="header">
+      <div class="emoji">🎉</div>
+      <h1 id="partyName"></h1>
+      <div class="meta" id="partyMeta"></div>
+    </div>
+
+    <div class="card" id="rsvpCard" style="display:none;">
+      <h2 id="rsvpGreeting"></h2>
+      <div class="status-row">
+        <button class="status-btn" id="btnConfirmed" onclick="setStatus('confirmed')">✓ Je viens</button>
+        <button class="status-btn" id="btnDeclined" onclick="setStatus('declined')">✗ Je ne peux pas</button>
+      </div>
+      <div style="margin-top:16px;">
+        <label style="font-size:13px; font-weight:600; color:var(--text-secondary);">Allergie ou régime alimentaire (optionnel)</label>
+        <textarea id="allergiesInput" rows="2" placeholder="ex: allergie aux fruits à coque, végétarien..."></textarea>
+        <button class="btn btn-outline" onclick="saveAllergies()">Enregistrer</button>
+      </div>
+      <div class="success" id="rsvpSuccess">Merci, c'est enregistré ! 🎉</div>
+      <div class="error" id="rsvpError">Une erreur est survenue, réessaie.</div>
+    </div>
+
+    <div class="card" id="noTokenCard" style="display:none;">
+      <p class="note">Tu n'as pas de lien personnel — demande à l'organisateur ton lien d'invitation pour confirmer ta présence.</p>
+    </div>
+
+    <div class="card" id="wishlistCard" style="display:none;">
+      <h2>🎁 Idées cadeaux</h2>
+      <p class="note" style="margin-top:-8px; margin-bottom:12px;">Réserve un cadeau pour éviter les doublons — les autres invités ne verront pas qui l'a réservé.</p>
+      <div id="wishlistItems"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Firebase (compat SDK, pas de build nécessaire) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+// ============================================================================
+// ⚠️ À CONFIGURER : colle ici la config de ton app WEB Firebase.
+// Firebase Console > Paramètres du projet > Tes applications > Ajouter une
+// application "Web" (icône </>) si tu n'en as pas encore une, puis copie
+// l'objet firebaseConfig proposé ici.
+// ============================================================================
+const firebaseConfig = {
+  apiKey: "TON_API_KEY",
+  authDomain: "TON_PROJET.firebaseapp.com",
+  projectId: "TON_PROJET_ID",
+  storageBucket: "TON_PROJET.appspot.com",
+  messagingSenderId: "TON_SENDER_ID",
+  appId: "TON_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const params = new URLSearchParams(window.location.search);
+const eventId = params.get('event');
+const guestId = params.get('guest');
+const token = params.get('token');
+
+let currentGuestData = null;
+let currentStatus = null;
+
+async function load() {
+  if (!eventId) { showNotFound(); return; }
+
+  try {
+    const eventDoc = await db.collection('publicEvents').doc(eventId).get();
+    if (!eventDoc.exists) { showNotFound(); return; }
+    const event = eventDoc.data();
+
+    document.getElementById('partyName').textContent = event.name || 'Ma fête';
+    const date = event.date ? new Date(event.date) : null;
+    const dateStr = date ? date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    const timeStr = date ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+    document.getElementById('partyMeta').innerHTML =
+      `${dateStr} à ${timeStr}` + (event.location ? `<br>📍 ${event.location}` : '');
+
+    if (guestId && token) {
+      await loadGuestRSVP();
+    } else {
+      document.getElementById('noTokenCard').style.display = 'block';
+    }
+
+    await loadWishlist();
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+  } catch (e) {
+    console.error(e);
+    showNotFound();
+  }
+}
+
+async function loadGuestRSVP() {
+  const guestRef = db.collection('publicEvents').doc(eventId).collection('guests').doc(guestId);
+  const guestDoc = await guestRef.get();
+  if (!guestDoc.exists) return;
+  const data = guestDoc.data();
+  if (data.token !== token) return; // lien invalide, on n'affiche pas le bloc RSVP
+
+  currentGuestData = data;
+  currentStatus = data.status;
+  const firstName = (data.name || '').split(' ')[0];
+  document.getElementById('rsvpGreeting').textContent = `Salut ${firstName} 👋 Tu viens ?`;
+  document.getElementById('allergiesInput').value = data.allergies || '';
+  updateStatusButtons();
+  document.getElementById('rsvpCard').style.display = 'block';
+}
+
+function updateStatusButtons() {
+  document.getElementById('btnConfirmed').classList.toggle('active', currentStatus === 'confirmed');
+  document.getElementById('btnConfirmed').classList.toggle('confirmed', currentStatus === 'confirmed');
+  document.getElementById('btnDeclined').classList.toggle('active', currentStatus === 'declined');
+  document.getElementById('btnDeclined').classList.toggle('declined', currentStatus === 'declined');
+}
+
+async function setStatus(status) {
+  const guestRef = db.collection('publicEvents').doc(eventId).collection('guests').doc(guestId);
+  try {
+    await guestRef.update({ status: status, name: currentGuestData.name, token: token });
+    currentStatus = status;
+    updateStatusButtons();
+    flashSuccess();
+  } catch (e) {
+    console.error(e);
+    flashError();
+  }
+}
+
+async function saveAllergies() {
+  const guestRef = db.collection('publicEvents').doc(eventId).collection('guests').doc(guestId);
+  const value = document.getElementById('allergiesInput').value;
+  try {
+    await guestRef.update({ allergies: value, name: currentGuestData.name, token: token });
+    flashSuccess();
+  } catch (e) {
+    console.error(e);
+    flashError();
+  }
+}
+
+function flashSuccess() {
+  const el = document.getElementById('rsvpSuccess');
+  el.style.display = 'block';
+  document.getElementById('rsvpError').style.display = 'none';
+  setTimeout(() => { el.style.display = 'none'; }, 2500);
+}
+function flashError() {
+  document.getElementById('rsvpError').style.display = 'block';
+}
+
+async function loadWishlist() {
+  const snap = await db.collection('publicEvents').doc(eventId).collection('wishes').get();
+  if (snap.empty) return;
+
+  const container = document.getElementById('wishlistItems');
+  container.innerHTML = '';
+  snap.forEach(doc => {
+    const wish = doc.data();
+    const isClaimed = wish.reservedBy && wish.reservedBy.trim().length > 0;
+    const row = document.createElement('div');
+    row.className = 'wish-item';
+    row.innerHTML = `
+      <div>
+        <div class="wish-name">${escapeHtml(wish.name)}</div>
+        <div class="wish-price">${wish.price > 0 ? wish.price.toFixed(0) + ' €' : 'Prix non renseigné'}</div>
+      </div>
+      <button class="claim-btn ${isClaimed ? 'claimed' : ''}" ${isClaimed ? 'disabled' : ''}
+              onclick="claimWish('${doc.id}')">
+        ${isClaimed ? '✓ Réservé' : "Je m'en occupe"}
+      </button>
+    `;
+    container.appendChild(row);
+  });
+
+  document.getElementById('wishlistCard').style.display = 'block';
+}
+
+async function claimWish(wishId) {
+  const name = prompt("Ton prénom (pour que l'organisateur sache que c'est réservé) :");
+  if (!name || !name.trim()) return;
+
+  const wishRef = db.collection('publicEvents').doc(eventId).collection('wishes').doc(wishId);
+  try {
+    const doc = await wishRef.get();
+    const data = doc.data();
+    await wishRef.update({ reservedBy: name.trim(), name: data.name, price: data.price });
+    await loadWishlist();
+  } catch (e) {
+    console.error(e);
+    alert("Impossible de réserver ce cadeau, réessaie.");
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+function showNotFound() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('notFound').style.display = 'block';
+}
+
+load();
+</script>
+</body>
+</html>
