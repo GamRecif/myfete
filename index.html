@@ -102,6 +102,7 @@
       <div class="emoji">🎉</div>
       <h1 id="partyName"></h1>
       <div class="meta" id="partyMeta"></div>
+      <div class="pill" id="playlistPill" style="display:none; cursor:pointer;" onclick="openPlaylist()">🎵 Écouter la playlist</div>
     </div>
 
     <div class="card" id="rsvpCard" style="display:none;">
@@ -177,6 +178,10 @@ async function load() {
     document.getElementById('partyMeta').innerHTML =
       `${dateStr} à ${timeStr}` + (event.location ? `<br>📍 ${event.location}` : '');
 
+    if (event.playlistLink) {
+      document.getElementById('playlistPill').style.display = 'inline-block';
+    }
+
     if (guestId && token) {
       await loadGuestRSVP();
     } else {
@@ -190,6 +195,12 @@ async function load() {
   } catch (e) {
     console.error(e);
     showNotFound();
+  }
+}
+
+function openPlaylist() {
+  if (currentEventData && currentEventData.playlistLink) {
+    window.open(currentEventData.playlistLink, '_blank');
   }
 }
 
