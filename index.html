@@ -78,6 +78,11 @@
   .note { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
   .success { color: var(--confirmed-fg); font-size: 13px; font-weight: 600; margin-top: 8px; display: none; }
   .error { color: var(--declined-fg); font-size: 13px; margin-top: 8px; display: none; }
+  .seat-pill {
+    display: none; margin-top: 12px; padding: 10px 14px;
+    background: var(--confirmed-bg); color: var(--confirmed-fg);
+    border-radius: 12px; font-size: 14px; font-weight: 600; text-align: center;
+  }
   #loading, #notFound { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
   #notFound { display: none; }
   #content { display: none; }
@@ -105,6 +110,7 @@
         <button class="status-btn" id="btnConfirmed" onclick="setStatus('confirmed')">✓ Je viens</button>
         <button class="status-btn" id="btnDeclined" onclick="setStatus('declined')">✗ Je ne peux pas</button>
       </div>
+      <div class="seat-pill" id="seatPill"></div>
       <div style="margin-top:16px;">
         <label style="font-size:13px; font-weight:600; color:var(--text-secondary);">Allergie ou régime alimentaire (optionnel)</label>
         <textarea id="allergiesInput" rows="2" placeholder="ex: allergie aux fruits à coque, végétarien..."></textarea>
@@ -153,6 +159,7 @@ const token = params.get('token');
 
 let currentGuestData = null;
 let currentStatus = null;
+let currentEventData = null;
 
 async function load() {
   if (!eventId) { showNotFound(); return; }
@@ -161,6 +168,7 @@ async function load() {
     const eventDoc = await db.collection('publicEvents').doc(eventId).get();
     if (!eventDoc.exists) { showNotFound(); return; }
     const event = eventDoc.data();
+    currentEventData = event;
 
     document.getElementById('partyName').textContent = event.name || 'Ma fête';
     const date = event.date ? new Date(event.date) : null;
@@ -198,7 +206,29 @@ async function loadGuestRSVP() {
   document.getElementById('rsvpGreeting').textContent = `Salut ${firstName} 👋 Tu viens ?`;
   document.getElementById('allergiesInput').value = data.allergies || '';
   updateStatusButtons();
+  showAssignedSeat();
   document.getElementById('rsvpCard').style.display = 'block';
+}
+
+/// Affiche la table assignée à cet invité, si le plan de table en contient une pour lui.
+function showAssignedSeat() {
+  if (!currentEventData || !currentEventData.seats) return;
+  const seat = currentEventData.seats.find(s => s.guestId === guestId);
+  if (!seat) return;
+
+  let tableName = null;
+  if (seat.tableId && currentEventData.tables) {
+    const table = currentEventData.tables.find(t => t.id === seat.tableId);
+    if (table) tableName = table.name;
+  }
+
+  const pill = document.getElementById('seatPill');
+  if (tableName) {
+    pill.textContent = `🍽️ Ta table : ${tableName}`;
+  } else {
+    pill.textContent = `🪑 Une place t'est réservée`;
+  }
+  pill.style.display = 'block';
 }
 
 function updateStatusButtons() {
