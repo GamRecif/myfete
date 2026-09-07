@@ -112,6 +112,14 @@
         <button class="status-btn" id="btnDeclined" onclick="setStatus('declined')">✗ Je ne peux pas</button>
       </div>
       <div class="seat-pill" id="seatPill"></div>
+
+      <div id="householdCard" style="display:none; margin-top:16px; padding:14px; background:var(--primary-bg); border-radius:12px;">
+        <div style="font-size:13px; font-weight:700; color:var(--primary-dark); margin-bottom:6px;">👨‍👩‍👧 Ton foyer</div>
+        <div id="householdMembersList" style="font-size:13px; color:var(--text-secondary); margin-bottom:10px;"></div>
+        <button class="btn btn-primary" style="margin-top:0;" onclick="setStatusForHousehold('confirmed')">✓ On vient tous</button>
+        <button class="btn btn-outline" onclick="setStatusForHousehold('declined')">✗ On ne peut pas venir</button>
+      </div>
+
       <div style="margin-top:16px;">
         <label style="font-size:13px; font-weight:600; color:var(--text-secondary);">Allergie ou régime alimentaire (optionnel)</label>
         <textarea id="allergiesInput" rows="2" placeholder="ex: allergie aux fruits à coque, végétarien..."></textarea>
@@ -218,7 +226,48 @@ async function loadGuestRSVP() {
   document.getElementById('allergiesInput').value = data.allergies || '';
   updateStatusButtons();
   showAssignedSeat();
+  showHousehold(data.householdId);
   document.getElementById('rsvpCard').style.display = 'block';
+}
+
+/// Affiche le bloc "ton foyer" si cet invité appartient à un groupe, avec la
+/// liste des autres membres et un bouton pour valider en leur nom à tous.
+function showHousehold(householdId) {
+  if (!householdId || !currentEventData || !currentEventData.householdMembers) return;
+  const members = currentEventData.householdMembers[householdId];
+  if (!members || members.length < 2) return; // seul dans son "foyer" = rien à afficher
+
+  const others = members.filter(m => m.id !== guestId).map(m => m.name);
+  document.getElementById('householdMembersList').textContent =
+    others.length > 0 ? `Avec : ${others.join(', ')}` : '';
+  document.getElementById('householdCard').style.display = 'block';
+}
+
+/// Applique le même statut à tous les membres du foyer d'un coup. Chaque
+/// membre a son propre jeton (récupéré ici avant d'écrire), donc ça respecte
+/// les mêmes règles de sécurité qu'une validation individuelle.
+async function setStatusForHousehold(status) {
+  const householdId = currentGuestData.householdId;
+  const members = currentEventData.householdMembers[householdId] || [];
+  const guestsColl = db.collection('publicEvents').doc(eventId).collection('guests');
+
+  try {
+    await Promise.all(members.map(async (member) => {
+      const ref = guestsColl.doc(member.id);
+      const doc = await ref.get();
+      if (!doc.exists) return;
+      const memberData = doc.data();
+      await ref.update({ status: status, name: memberData.name, token: memberData.token });
+    }));
+    if (guestId && members.some(m => m.id === guestId)) {
+      currentStatus = status;
+      updateStatusButtons();
+    }
+    flashSuccess();
+  } catch (e) {
+    console.error(e);
+    flashError();
+  }
 }
 
 /// Affiche la table assignée à cet invité, si le plan de table en contient une pour lui.
@@ -292,17 +341,28 @@ async function loadWishlist() {
   container.innerHTML = '';
   snap.forEach(doc => {
     const wish = doc.data();
-    const isClaimed = wish.reservedBy && wish.reservedBy.trim().length > 0;
+    const reservedBy = Array.isArray(wish.reservedBy) ? wish.reservedBy : (wish.reservedBy ? [wish.reservedBy] : []);
+    const isCollective = !!wish.allowsMultipleContributors;
+    const isClaimed = reservedBy.length > 0;
+    // Cadeau collectif : toujours réservable, même après une 1ère personne.
+    // Cadeau classique : bloqué dès qu'une personne l'a réservé.
+    const isDisabled = isClaimed && !isCollective;
+
+    let buttonLabel = "Je m'en occupe";
+    if (isDisabled) buttonLabel = '✓ Réservé';
+    else if (isClaimed && isCollective) buttonLabel = `+ Participer aussi`;
+
     const row = document.createElement('div');
     row.className = 'wish-item';
     row.innerHTML = `
       <div>
         <div class="wish-name">${escapeHtml(wish.name)}</div>
         <div class="wish-price">${wish.price > 0 ? wish.price.toFixed(0) + ' €' : 'Prix non renseigné'}</div>
+        ${isCollective && isClaimed ? `<div class="note" style="margin-top:2px;">${reservedBy.length} personne${reservedBy.length > 1 ? 's' : ''} participe${reservedBy.length > 1 ? 'nt' : ''} déjà</div>` : ''}
       </div>
-      <button class="claim-btn ${isClaimed ? 'claimed' : ''}" ${isClaimed ? 'disabled' : ''}
+      <button class="claim-btn ${isDisabled ? 'claimed' : ''}" ${isDisabled ? 'disabled' : ''}
               onclick="claimWish('${doc.id}')">
-        ${isClaimed ? '✓ Réservé' : "Je m'en occupe"}
+        ${buttonLabel}
       </button>
     `;
     container.appendChild(row);
@@ -319,7 +379,13 @@ async function claimWish(wishId) {
   try {
     const doc = await wishRef.get();
     const data = doc.data();
-    await wishRef.update({ reservedBy: name.trim(), name: data.name, price: data.price });
+    const existing = Array.isArray(data.reservedBy) ? data.reservedBy : (data.reservedBy ? [data.reservedBy] : []);
+    const trimmedName = name.trim();
+    // Évite d'ajouter deux fois exactement le même nom
+    const updated = existing.some(n => n.toLowerCase() === trimmedName.toLowerCase())
+      ? existing
+      : [...existing, trimmedName];
+    await wishRef.update({ reservedBy: updated, name: data.name, price: data.price });
     await loadWishlist();
   } catch (e) {
     console.error(e);
